@@ -1,11 +1,17 @@
 
 INITIALPATH:7:22: error:
-    • INITIALPATH:10:5:
+    • INITIALPATH:10:27:
    |
 10 | {pi:l}|]
-   |     ^
-unexpected 'l'
-expecting '#', '%', '+', '-', '.', '0', 'E', 'F', 'G', 'X', 'b', 'c', 'd', 'e', 'f', 'g', 'n', 'o', 's', 'x', '}', integer, or space
+   |                           ^
+unexpected: "}"
+unexpected: "}"
+unexpected: "}"
+unexpected: "}"
+expecting: "<"
+expecting: ">"
+expecting: "^"
+expecting: "="
 
     • In the quasi-quotation: [fmt|hello
 

@@ -1,9 +1,9 @@
 
 INITIALPATH:7:22: error:
-    • INITIALPATH:11:10:
+    • INITIALPATH:11:31:
    |
 11 | in 1 + - / lalalal}|]
-   |          ^
+   |                               ^
 parse error on input `/' in haskell expression
 
     • In the quasi-quotation: [fmt|hello

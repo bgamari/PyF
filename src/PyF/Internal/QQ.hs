@@ -31,7 +31,9 @@ import PyF.Class
 import PyF.Formatters (AnyAlign (..))
 import qualified PyF.Formatters as Formatters
 import PyF.Internal.PythonSyntax
-import Text.Megaparsec
+import Text.Parsec
+import Text.Parsec.Error (errorMessages, setErrorPos)
+import Text.ParserCombinators.Parsec.Error (Message (..))
 
 -- Be Careful: empty format string
 
@@ -45,39 +47,59 @@ toExp expressionDelimiters s = do
           then [|fromString $(e)|]
           else e
   let context = ParsingContext expressionDelimiters exts
-  case runReader (runParserT parseGenericFormatString filename s) context of
+  case runReader (runParserT parseGenericFormatString () filename s) context of
     Left err -> do
       err' <- overrideErrorForFile filename err
-      fail (errorBundlePretty err')
+      fail =<< prettyError filename s err'
     Right items -> wrapFromString (goFormat items)
 
--- Megaparsec displays error relative to what they parsed
+prettyError :: FilePath -> String -> ParseError -> Q String
+prettyError filename s err = do
+  let sourceLoc = errorPos err
+      line = sourceLine sourceLoc
+      column = sourceColumn sourceLoc
+      name = sourceName sourceLoc
+      carretOffset = column - 1
+      carret = replicate carretOffset ' ' <> "^"
+      colIndicator = show line <> " | "
+      colPrefix = replicate (length (show line)) ' ' <> " |"
+
+  code <- case filename of
+    "<interactive>" -> pure s
+    _ -> do
+      content <- runIO (readFile filename)
+      pure $ lines content !! (line - 1)
+
+  pure $
+    unlines $
+      [ name <> ":" <> show line <> ":" <> show column <> ":",
+        colPrefix,
+        colIndicator <> code,
+        colPrefix <> " " <> carret
+      ]
+        ++ map messageToString (errorMessages err)
+
+messageToString :: Message -> String
+messageToString message = case message of
+  (SysUnExpect l_c) -> "unexpected: " <> l_c
+  (UnExpect l_c) -> "unexpected: " <> l_c
+  (Expect l_c) -> "expecting: " <> l_c
+  (Message l_c) -> "" <> l_c
+
+-- Parsec displays error relative to what they parsed
 -- However the formatting string is part of a more complex file and we
 -- want error reporting relative to that file
-overrideErrorForFile :: FilePath -> ParseErrorBundle String e -> Q (ParseErrorBundle String e)
 -- We have no may to recover interactive content
--- So we won't do better than displaying the megaparsec
+-- So we won't do better than displaying the Parsec
 -- error relative to the quasi quote content
+overrideErrorForFile :: FilePath -> ParseError -> Q ParseError
 overrideErrorForFile "<interactive>" err = pure err
 -- We know the content of the file here
-overrideErrorForFile filename err = do
+overrideErrorForFile _ err = do
   (line, col) <- loc_start <$> location
-  fileContent <- runIO (readFile filename)
-  let -- drop the first lines of the file up to the line containing the quasiquote
-      -- then, split in what is before the QQ and what is after.
-      -- e.g.  blablabla [fmt|hello|] will split to
-      -- "blablabla [fmt|" and "hello|]"
-      (prefix, postfix) = splitAt (col - 1) $ unlines $ drop (line - 1) (lines fileContent)
-  pure $
-    err
-      { bundlePosState =
-          (bundlePosState err)
-            { pstateInput = postfix,
-              pstateSourcePos = SourcePos filename (mkPos line) (mkPos col),
-              pstateOffset = 0,
-              pstateLinePrefix = prefix
-            }
-      }
+  let sourcePos = errorPos err
+      sourcePos' = incSourceColumn (incSourceLine sourcePos (line - 1)) (col - 1)
+  pure $ setErrorPos sourcePos' err
 
 toExpPython :: String -> Q Exp
 toExpPython = toExp ('{', '}')
@@ -85,7 +107,7 @@ toExpPython = toExp ('{', '}')
 {-
 Note: Empty String Lifting
 
-Empty string are lifter as [] instead of "", so I'm using LitE (String L) instead
+Empty string are lifted as [] instead of "", so I'm using LitE (String L) instead
 -}
 
 goFormat :: [Item] -> Q Exp

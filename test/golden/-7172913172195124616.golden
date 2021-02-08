@@ -1,9 +1,9 @@
 
 INITIALPATH:7:22: error:
-    • INITIALPATH:8:4:
+    • INITIALPATH:8:25:
   |
 8 | bli\Pbar|]
-  |    ^
+  |                         ^
 Lexical error in literal section
 
     • In the quasi-quotation: [fmt|foo
